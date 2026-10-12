@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>⚙️ Detalle Equipo · FLOWGUARD NOC</title>
+<link rel="stylesheet" href="/static/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  .spinner-c {
+    display:inline-block;width:10px;height:10px;
+    border:2px solid rgba(34,211,238,.25);
+    border-top-color:#22D3EE;
+    border-radius:50%;
+    animation:nocspin 900ms linear infinite;
+    vertical-align:middle;margin-right:6px;
+  }
+  @keyframes nocspin{to{transform:rotate(360deg);}}
+  .info-error {
+    background: rgba(239,68,68,.08);
+    border: 1px dashed rgba(239,68,68,.35);
+    color: #FECACA;
+    border-radius:10px;
+    padding: 14px 16px;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .info-hint {
+    background: rgba(34,211,238,.06);
+    border: 1px dashed rgba(34,211,238,.3);
+    color: #A5F3FC;
+    border-radius:10px;
+    padding:12px 14px;
+    font-size:11.8px;
+    line-height:1.55;
+    margin-top:8px;
+  }
+  .kpi .value.text-pill { font-size: 19px; letter-spacing: .15px; font-weight: 800; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="title">
+    <a href="/" class="btn ghost" style="padding:6px 11px;font-size:12px;">← Volver al Rack</a>
+    <h1>⚙️ DETALLE · <span id="eq-nombre"><span class="spinner-c"></span>Cargando…</span></h1>
+    <div class="status-strip">
+      <span class="badge o"><span class="dot" id="pollDot"></span>LIVE 4s</span>
+    </div>
+  </div>
+  <div class="actions">
+    <span class="updated" id="updated">Conectando con telemetría FLOWGUARD…</span>
+    <button class="btn primary" onclick="actualizar(true)">🔄 Actualizar</button>
+    <button class="btn purple" id="btn-cli" onclick="abrirCLI()">🖥️ Abrir CLI</button>
+    <button class="btn orange" onclick="abrirGrafana()">📊 Grafana</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- 4 KPIs (texto grande simple + pill en el foot, NO pill dentro de .value) -->
+  <section class="kpi-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));">
+    <div class="kpi">
+      <div class="label">GNS3 Status</div>
+      <div class="value green text-pill" id="k-gns3"><span class="spinner-c"></span>Esperando…</div>
+      <div class="foot" id="k-gns3-sub"><span class="pill unknown"><span class="dot"></span>SIN DATOS</span> · estado raw: —</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Ping ICMP</div>
+      <div class="value orange" id="k-ping"><span class="spinner-c"></span>—</div>
+      <div class="foot" id="k-ping-sub"><span class="pill unknown"><span class="dot"></span>SONDEANDO</span> · latencia real</div>
+    </div>
+    <div class="kpi">
+      <div class="label">CPU 5s</div>
+      <div class="value blue" id="k-cpu"><span class="spinner-c"></span>—</div>
+      <div class="foot" id="k-cpu-sub">utilización · detalle 1m / 5m</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Interfaces</div>
+      <div class="value blue" id="k-intf"><span class="spinner-c"></span>—</div>
+      <div class="foot" id="k-intf-sub"><span class="pill up" style="margin-right:6px;"><span class="dot"></span>0 UP</span><span class="pill down"><span class="dot"></span>0 DOWN</span></div>
+    </div>
+  </section>
+
+  <!-- Info general + chart interfaces -->
+  <section class="main-grid-2col">
+    <div class="card">
+      <h2>📝 Información General <span class="hint">GNS3 + CLI Cisco real</span></h2>
+      <div class="table-scroll" id="wrap-info" style="max-height:360px;">
+        <table>
+          <tbody id="tabla-info">
+            <tr><th colspan="2" class="empty"><span class="spinner-c"></span>Aguardando telemetría (primer ciclo ~5s si encendiste el equipo recién)</th></tr>
+          </tbody>
+        </table>
+        <div id="info-msg" style="margin:8px 4px 4px;"></div>
+      </div>
+    </div>
+    <div class="card chart">
+      <h2>📊 Estado Interfaces <span class="hint">Doughnut CLI real</span></h2>
+      <div style="height:230px; position:relative;">
+        <canvas id="chartIntfDetail"></canvas>
+      </div>
+      <div style="margin-top:8px;color:var(--fg-text-muted);font-size:11.5px;">
+        ✅ Actualizado cada 4s con datos reales del prompt del dispositivo · requiere que el equipo esté <span style="color:#6EE7B7;">● RUNNING</span> y arrancado (prompt listo).
+      </div>
+    </div>
+  </section>
+
+  <!-- Tabla interfaces con scroll interno -->
+  <section class="card wide" style="margin-top:14px;">
+    <h2>🔌 Tabla de Interfaces (CLI Cisco real)</h2>
+    <div class="table-scroll" id="wrap-interfaces" style="max-height:420px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Interfaz</th>
+            <th>Estado</th>
+            <th>IP</th>
+            <th>Admin</th>
+            <th>Link</th>
+            <th>Descripción</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-interfaces">
+          <tr><td colspan="6" class="empty"><span class="spinner-c"></span>Conectando con CLI Cisco vía Telnet… <span style="opacity:.6;">(pueden pasar 10-20s hasta que el router/switch responda)</span></td></tr>
+        </tbody>
+      </table>
+      <div id="iface-msg" style="margin:8px 4px 4px;"></div>
+    </div>
+  </section>
+
+  <!-- Modal CLI -->
+  <div id="modal-cli" class="modal-mask" style="display:none;">
+    <div class="card" onclick="event.stopPropagation()">
+      <h2>🖥️ Abrir CLI — <span id="modal-cli-title">equipo</span></h2>
+      <p id="modal-cli-msg" style="font-size:13px;margin:10px 0 16px;"></p>
+      <div style="background:var(--fg-bg-0);border:1px solid var(--fg-border-hi);border-radius:10px;padding:12px;margin-bottom:14px;">
+        <div style="color:var(--fg-text-dim);font-size:10.5px;letter-spacing:1px;margin-bottom:4px;">HOST</div>
+        <div id="modal-cli-host" style="font-family:Consolas,monospace;color:#C7D2FE;font-size:14px;"></div>
+        <div style="color:var(--fg-text-dim);font-size:10.5px;letter-spacing:1px;margin:12px 0 4px;">PUERTO TELNET</div>
+        <div id="modal-cli-port" style="font-family:Consolas,monospace;color:#C7D2FE;font-size:14px;"></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a id="modal-cli-telnet" class="btn primary" style="text-decoration:none;" target="_blank">🔗 Abrir telnet://</a>
+        <button class="btn gray" id="modal-cli-copy">📋 Copiar host:puerto</button>
+        <button class="btn orange" onclick="cerrarModalCli()">Cerrar</button>
+      </div>
+      <div style="color:var(--fg-text-muted);font-size:11.5px;margin-top:12px;">
+        💡 Si el enlace no abre: PuTTY → Connection type: Telnet → pegar host y puerto.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const NODE_ID = ("{{ node_id }}" || "").trim();
+const DASHBOARD_URL = "{{ dashboard_url }}";
+let chartIntf = null;
+let firstRun = true;
+
+Chart.defaults.color = "#CBD5E1";
+Chart.defaults.borderColor = "rgba(62,90,150,.22)";
+Chart.defaults.font.family = "system-ui, Segoe UI, Roboto";
+Chart.defaults.plugins.legend.labels.boxWidth = 12;
+Chart.defaults.plugins.legend.labels.padding = 14;
+Chart.defaults.plugins.legend.labels.font = { size: 11 };
+
+function pGns3(encendido) {
+  if (encendido === true || encendido === "true") return {
+    value: `✅ RUNNING`, pillCls: "pill up", pillText: "ENCENDIDO", colorCls: "green"
+  };
+  if (encendido === false || encendido === "false") return {
+    value: `🛑 STOPPED`, pillCls: "pill down", pillText: "APAGADO", colorCls: "red"
+  };
+  return { value: `❔ SIN DATOS`, pillCls: "pill unknown", pillText: "UNKNOWN", colorCls: "orange" };
+}
+function pPing(ok, ms) {
+  const hasNum = typeof ms === "number" && Number.isFinite(ms);
+  if (ok === true && hasNum) {
+    const cls = ms < 10 ? "green" : ms < 60 ? "orange" : "red";
+    const pcls = ms < 10 ? "pill up" : ms < 60 ? "pill unknown" : "pill down";
+    return { value: `${ms} ms`, pillCls: pcls, pillText: "ONLINE", colorCls: cls };
+  }
+  if (ok === true) return { value: "ONLINE", pillCls: "pill up", pillText: "ONLINE", colorCls: "green" };
+  if (ok === false) return { value: "OFFLINE", pillCls: "pill down", pillText: "OFFLINE", colorCls: "red" };
+  return { value: "N/D", pillCls: "pill unknown", pillText: "SONDEANDO", colorCls: "orange" };
+}
+function pCPU(c) {
+  if (typeof c !== "number" || !Number.isFinite(c)) return { value: "N/D", pillCls: "pill unknown", pillText: "SIN DATOS", colorCls: "orange" };
+  const cls = c < 30 ? "green" : c < 70 ? "orange" : "red";
+  const pcls = c < 30 ? "pill up" : c < 70 ? "pill unknown" : "pill down";
+  return { value: `${c}%`, pillCls: pcls, pillText: `${c}%`, colorCls: cls };
+}
+
+let pollAnim = null;
+function startPollAnim() {
+  const d = document.getElementById("pollDot");
+  clearInterval(pollAnim);
+  let on = true;
+  pollAnim = setInterval(() => {
+    d.style.boxShadow = on ? "0 0 10px rgba(34,211,238,.9)" : "0 0 4px rgba(34,211,238,.4)";
+    on = !on;
+  }, 700);
+}
+startPollAnim();
+
+function showInfoError(title, msg) {
+  const tbody = document.getElementById("tabla-info");
+  const m = document.getElementById("info-msg");
+  tbody.innerHTML = `<tr><th colspan="2" class="empty">${title}</th></tr>`;
+  m.innerHTML = `<div class="info-error">${msg}</div>`;
+}
+function showIfaceError(title, msg) {
+  const tbody = document.getElementById("tabla-interfaces");
+  const m = document.getElementById("iface-msg");
+  tbody.innerHTML = `<tr><td colspan="6" class="empty">${title}</td></tr>`;
+  m.innerHTML = `<div class="info-error">${msg}</div>`;
+}
+
+async function actualizar(verbose=false) {
+  try {
+    if (!NODE_ID || NODE_ID === "{{ node_id }}") {
+      throw new Error("NODE_ID vacío. Vuelve al Rack y abre el detalle desde el botón VER.");
+    }
+    const r = await fetch(`/api/equipo/${encodeURIComponent(NODE_ID)}`, { cache:"no-store" });
+    const raw = await r.text();
+    let j;
+    try { j = JSON.parse(raw); } catch { j = { ok: false, error: "Respuesta no JSON del servidor: " + raw.slice(0, 120) }; }
+    if (!r.ok || !j.ok) {
+      throw new Error(j.error || ("HTTP " + r.status));
+    }
+    if (!j.equipo) throw new Error("El servidor no devolvió el objeto 'equipo'.");
+    window.__eqLocal = j.equipo;
+    render(j.equipo, j.resumen);
+    const t = j.resumen?.ultima_actualizacion ? ("Actualizado: " + j.resumen.ultima_actualizacion) : "Actualizado OK (sin marca de tiempo aún)";
+    document.getElementById("updated").textContent = t;
+    if (verbose) flashButton("✅ OK");
+  } catch (e) {
+    document.getElementById("updated").textContent = "⚠️ " + e.message;
+    showInfoError("⚠️ No se pudieron cargar datos de este equipo",
+      `<strong>Causa probable:</strong><br>${escapeHtml(e.message)}<br><br>` +
+      `👉 <strong>Soluciones comunes:</strong><br>` +
+      `1) Asegúrate de tener FLOWGUARD abierto y GNS3 con el proyecto cargado.<br>` +
+      `2) Espera 10-15s y vuelve a abrir esta ventana DESDE el botón 🔍 VER del Rack (NO refresques F5 antes que el inventario cargue).<br>` +
+      `3) Verifica que el equipo esté marcado como ● RUNNING y haya arrancado completamente (prompt en consola).<br>` +
+      `4) En último caso, reinicia FLOWGUARD con doble clic en <code>▶ EJECUTAR_FLOWGUARD.bat</code>.`
+    );
+    showIfaceError("⚠️ Sin datos de interfaces",
+      `Interfaces CLI dependen del login por Telnet al equipo. El error global fue: <code style="color:#FECACA;">${escapeHtml(e.message)}</code>.` +
+      `<div style="margin-top:6px;"><button class="btn orange" onclick="actualizar(true)" style="padding:6px 12px;font-size:12px;">🔄 Reintentar ahora</button></div>`
+    );
+    if (verbose) flashButton("❌ Error");
+  }
+}
+
+function flashButton(t) {
+  const b = document.querySelectorAll("header .actions .btn.primary")[0];
+  if (!b) return;
+  const orig = b.innerHTML;
+  b.innerHTML = t;
+  setTimeout(() => b.innerHTML = orig, 1400);
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function render(eq, resumen) {
+  firstRun = false;
+  document.getElementById("eq-nombre").textContent = eq.nombre || "Equipo sin nombre";
+  document.title = `⚙️ ${eq.nombre || "Equipo"} · FLOWGUARD NOC`;
+
+  // --- KPI 1: GNS3
+  const g = pGns3(eq.gns3_encendido);
+  const g1 = document.getElementById("k-gns3");
+  g1.className = `value ${g.colorCls} text-pill`;
+  g1.innerHTML = g.value;
+  document.getElementById("k-gns3-sub").innerHTML = `<span class="${g.pillCls}"><span class="dot"></span>${g.pillText}</span> · estado raw: ${escapeHtml(eq.gns3_status || "n/a")}`;
+
+  // --- KPI 2: Ping
+  const pp = pPing(eq.ping_ok, eq.ping_ms);
+  const g2 = document.getElementById("k-ping");
+  g2.className = `value ${pp.colorCls}`;
+  g2.textContent = pp.value;
+  document.getElementById("k-ping-sub").innerHTML = `<span class="${pp.pillCls}"><span class="dot"></span>${pp.pillText}</span> · latencia real al IP de gestión`;
+
+  // --- KPI 3: CPU
+  const uso5 = (eq.cpu_uso && typeof eq.cpu_uso.cpu_5s === "number") ? eq.cpu_uso.cpu_5s : null;
+  const cc = pCPU(uso5);
+  const g3 = document.getElementById("k-cpu");
+  g3.className = `value ${cc.colorCls}`;
+  g3.textContent = cc.value;
+  const uso1 = (eq.cpu_uso && typeof eq.cpu_uso.cpu_1m === "number") ? eq.cpu_uso.cpu_1m : null;
+  const uso5m = (eq.cpu_uso && typeof eq.cpu_uso.cpu_5m === "number") ? eq.cpu_uso.cpu_5m : null;
+  const p1 = pCPU(uso1), p5m = pCPU(uso5m);
+  document.getElementById("k-cpu-sub").innerHTML =
+    `utilización · <span class="${cc.pillCls}"><span class="dot"></span>5s ${cc.pillText}</span> · ` +
+    `<span class="${p1.pillCls}"><span class="dot"></span>1m ${p1.pillText}</span> · ` +
+    `<span class="${p5m.pillCls}"><span class="dot"></span>5m ${p5m.pillText}</span>`;
+
+  // --- KPI 4: Interfaces
+  const interfaces = (eq.interfaces && typeof eq.interfaces === "object" && !Array.isArray(eq.interfaces)) ? eq.interfaces : {};
+  const keys = Object.keys(interfaces);
+  const upInt = keys.filter(k => { const s = (interfaces[k] || {}).estado; return s === "Up" || s === "up"; }).length;
+  const downInt = keys.length - upInt;
+  document.getElementById("k-intf").textContent = String(keys.length);
+  document.getElementById("k-intf-sub").innerHTML =
+    `<span class="pill up" style="margin-right:6px;"><span class="dot"></span>${upInt} UP</span>` +
+    `<span class="pill down"><span class="dot"></span>${downInt} DOWN</span>` +
+    (keys.length === 0 ? `<span style="margin-left:8px;color:var(--fg-text-dim);">· SIN CLI AÚN</span>` : "");
+
+  // --- TABLA INFO
+  document.getElementById("info-msg").innerHTML = "";
+  const filas = [];
+  filas.push(filaInfo("Nombre de equipo GNS3", escapeHtml(eq.nombre || "N/D")));
+  filas.push(filaInfo("Hostname (Cisco IOS)", escapeHtml(eq.hostname_so || "N/D")));
+  filas.push(filaInfo("Modelo", escapeHtml(eq.modelo || "N/D")));
+  filas.push(filaInfo("Versión SO (Cisco IOS/IOS-XE)", `<span style="font-family:Consolas,monospace;color:#C7D2FE;">${escapeHtml(eq.version_so || "N/D")}</span>`));
+  filas.push(filaInfo("Uptime (Tiempo encendido)", escapeHtml(eq.uptime || "N/D")));
+  filas.push(filaInfo("IP Gestión", `<span class="tag-ip">${escapeHtml(eq.ip_gestion || "N/D")}</span>`));
+  filas.push(filaInfo("Console (GNS3 host:puerto)", `<span class="tag-ip">${escapeHtml(String(eq.console_host || "127.0.0.1"))}:${escapeHtml(String(eq.console_port || "—"))}</span>`));
+  filas.push(filaInfo("CPU 5s / 1m / 5m", `${cc.value} · ${p1.value} · ${p5m.value}`));
+  filas.push(filaInfo("Interfaces detectadas (CLI Cisco)", `${String(keys.length)} · ${upInt} UP · ${downInt} DOWN`));
+  filas.push(filaInfo("Node ID GNS3", `<span style="font-family:Consolas,monospace;font-size:12px;color:#93C5FD;">${escapeHtml(eq.node_id || "")}</span>`));
+  const tbInfo = document.getElementById("tabla-info");
+  tbInfo.innerHTML = filas.join("");
+
+  // Pista si NO hay interfaces ni hostname (equipo apagado o sin inventario CLI)
+  if (keys.length === 0 && !eq.hostname_so) {
+    document.getElementById("info-msg").innerHTML = `<div class="info-hint">ℹ️ El equipo todavía no devolvió datos de CLI Cisco. Esto es normal si está <b>apagado</b> o si acaba de arrancar y FLOWGUARD aún no logró conectarse por Telnet. Volverá a intentarlo cada 5 segundos.</div>`;
+  }
+
+  // --- GRÁFICO doughnut
+  if (!chartIntf) {
+    chartIntf = new Chart(document.getElementById("chartIntfDetail"), {
+      type: "doughnut",
+      data: { labels: ["UP", "DOWN", "N/D"], datasets: [{
+        data: [0,0,0],
+        backgroundColor: ["#10B981","#EF4444","#64748B"],
+        borderColor: "#0B1224",
+        borderWidth: 3,
+        hoverOffset: 4
+      }]},
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        cutout: "62%",
+        plugins:{ legend:{ position:"bottom" }, title:{ display:false } }
+    }});
+  }
+  const nd = Math.max(0, keys.length - upInt - downInt);
+  chartIntf.data.datasets[0].data = [upInt, downInt, nd];
+  chartIntf.update("none");
+
+  // --- TABLA INTERFACES
+  document.getElementById("iface-msg").innerHTML = "";
+  const tbody = document.getElementById("tabla-interfaces");
+  if (!keys.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">Sin datos de interfaces. Para obtener esta información el equipo debe estar <b>● ENCENDIDO (RUNNING)</b>, ser tipo Cisco (router/switch/core) y arrancado completamente (prompt # visible). FLOWGUARD lo reintenta automáticamente cada 5s.</td></tr>`;
+    document.getElementById("iface-msg").innerHTML =
+      `<div class="info-hint">Puedes acelerar la detección manualmente → <button class="btn orange" onclick="actualizar(true)" style="padding:6px 12px;font-size:12px;">🔄 Refrescar ahora</button></div>`;
+  } else {
+    tbody.innerHTML = keys.slice().sort(intfSort).map(k => {
+      const i = interfaces[k] || {};
+      const isUp = i.estado === "Up" || i.estado === "up";
+      const cls = isUp ? "pill up" : "pill down";
+      return `<tr>
+        <td style="font-family:Consolas,monospace;">${escapeHtml(k)}</td>
+        <td><span class="${cls}"><span class="dot"></span>${escapeHtml(String(i.estado || "N/D"))}</span></td>
+        <td>${i.ip ? `<span class="tag-ip">${escapeHtml(String(i.ip))}</span>` : "N/D"}</td>
+        <td><span class="intf-meta">${escapeHtml(String(i.admin || "—"))}</span></td>
+        <td><span class="intf-meta">${escapeHtml(String(i.link || "—"))}</span></td>
+        <td>${i.descripcion ? escapeHtml(String(i.descripcion)) : "<span class='intf-meta'>Sin descripción</span>"}</td>
+      </tr>`;
+    }).join("");
+  }
+}
+
+function intfSort(a, b) {
+  const pa = parseInt((a.match(/\d+/) || ["0"])[0], 10);
+  const pb = parseInt((b.match(/\d+/) || ["0"])[0], 10);
+  const sa = String(a).replace(/\d+/g, "");
+  const sb = String(b).replace(/\d+/g, "");
+  if (sa !== sb) return sa.localeCompare(sb);
+  return pa - pb;
+}
+
+function filaInfo(k, v) {
+  return `<tr><th style="width:34%;text-align:left;padding:11px 12px;border-bottom:1px solid rgba(62,90,150,.22);color:var(--fg-text-muted);font-size:11.5px;font-weight:700;letter-spacing:.5px;">${k}</th><td style="border-bottom:1px solid rgba(62,90,150,.22);padding:11px 12px;">${v}</td></tr>`;
+}
+
+async function abrirCLI() {
+  const eq = window.__eqLocal || {};
+  const host = String(eq.console_host || "127.0.0.1").trim();
+  const port = String(eq.console_port || "").trim();
+  const nombre = eq.nombre || host;
+  let msg = "";
+  let telnetLink = "";
+  try {
+    const r = await fetch(`/api/abrir-cli?host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}`);
+    const j = await r.json();
+    msg = j.mensaje || "";
+    telnetLink = j.telnet_link || `telnet://${host}:${port}`;
+  } catch (e) {
+    msg = "Error: " + e.message;
+    telnetLink = `telnet://${host}:${port}`;
+  }
+  if (!port) msg = "⚠️ Aún no se cargó el puerto Telnet de GNS3. Volvé al Rack, esperá 5s y volvé a entrar al detalle.";
+  document.getElementById("modal-cli-title").textContent = nombre;
+  document.getElementById("modal-cli-msg").textContent = msg;
+  document.getElementById("modal-cli-host").textContent = host;
+  document.getElementById("modal-cli-port").textContent = port || "—";
+  document.getElementById("modal-cli-telnet").href = telnetLink;
+  document.getElementById("modal-cli-copy").onclick = () => {
+    const text = port ? `${host}:${port}` : host;
+    Promise.resolve(navigator.clipboard?.writeText(text)).then(() => {
+      const b = document.getElementById("modal-cli-copy");
+      const orig = b.textContent;
+      b.textContent = "✅ Copiado";
+      setTimeout(() => b.textContent = orig, 1200);
+    }).catch(()=>{});
+  };
+  document.getElementById("modal-cli").style.display = "flex";
+}
+function cerrarModalCli() { document.getElementById("modal-cli").style.display = "none"; }
+document.getElementById("modal-cli").addEventListener("click", cerrarModalCli);
+
+async function abrirGrafana() {
+  try { await fetch("/api/abrir-grafana"); } catch (e) {}
+  window.open("http://localhost:3000", "_blank");
+}
+
+(async function init(){
+  try {
+    await actualizar(false);
+  } catch (e) {
+    document.getElementById("updated").textContent = "⚠️ Error inicial: " + e.message;
+  }
+  setInterval(() => actualizar(false), 4000);
+})();
+</script>
+</body>
+</html>

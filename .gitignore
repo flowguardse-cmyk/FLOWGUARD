@@ -1,0 +1,58 @@
+# === ENTORNO VIRTUAL PYTHON ===
+venv/
+env/
+ENV/
+virtualenv/
+.venv/
+
+# === ARCHIVOS COMPILADOS PYTHON ===
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# === CACHE / DATOS LOCALES FLOWGUARD ===
+devices.json
+.env
+_backups/
+*_backup_pre_redesign_*.py
+*_backup_pre_redesign_*.css
+*_backup_pre_redesign_*.html
+flowguard_backup_fase2_*.py
+_backups/
+bk*.txt
+bk*.*
+
+# === ARCHIVOS DE PRUEBA LOCALES ===
+_test_*.py
+_test_*.txt
+
+# === VARIABLES DE ENTORNO / SECRETOS (NUNCA SUBIR) ===
+.env
+.env.*
+!.env.example
+
+# === ARCHIVOS DEL SISTEMA WINDOWS ===
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# === ARCHIVOS DE EDITORES / IDEs ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# === LOGS ===
+*.log
+logs/
+
+# === OTROS ===
+.DS_Store (para compatibilidad Mac)
+node_modules/ (por si en el futuro usamos JS build)
